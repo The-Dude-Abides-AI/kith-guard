@@ -20,12 +20,11 @@ Sources are classified by evidence tier and mapped to specific design decisions.
 | --- | --- | --- |
 | **SycEval** | [AIES 2025](https://arxiv.org/abs/2502.08177) — 78.5% persistence rate once sycophancy triggers | → Decision 7: trigger on first capitulation; Decision 8: score semantics calibrated to catch early weakening |
 | **MIRROR** | [arXiv 2506.00430](https://arxiv.org/abs/2506.00430) — Two-layer Thinker + Talker architecture | → Decision 3: gateway-level hook implements the Thinker layer for all agents |
-| **CONSENSAGENT** | [Pitre et al., ACL 2025 Findings](https://x.com/priyapitre/status/1926148257584996824) — Sycophancy compounds in multi-agent systems | → Decision 3: multi-agent scope; Decision 6: per-agent config with independent thresholds |
-
-**Tier 2 — Industry:**
+**Tier 2 — Industry & accepted papers (cited via secondary sources):**
 
 | Source | Citation | Design Impact |
 | --- | --- | --- |
+| **CONSENSAGENT** | [Pitre et al., ACL 2025 Findings](https://x.com/priyapitre/status/1926148257584996824) — Sycophancy compounds in multi-agent systems. Peer-reviewed (ACL Findings), cited via author announcement; full proceedings link pending | → Decision 3: multi-agent scope; Decision 6: per-agent config with independent thresholds |
 | **OpenAI April 2025 Sycophancy Rollback** | [Official blog post](https://openai.com/index/expanding-on-sycophancy/) — GPT-4o approval-optimization regression | → Decision 1: quality > speed tradeoff on flagged turns |
 | **Cupcake** | [eqtylab/cupcake](https://github.com/eqtylab/cupcake) — Production OSS agent policy enforcement | → Decision 2: fail-open pattern; intercept → evaluate → block/modify architecture |
 
@@ -92,6 +91,7 @@ The judge evaluation MUST complete within **2 seconds**. If the timeout is excee
 | Triggered, score below rewrite threshold (pass) | ~2s judge | ~2s judge | ~2s judge |
 | Triggered, score ≥ rewrite threshold | ~2s judge (no rewrite) | ~2s judge (flag only) | ~2s judge + ~2s rewrite = ~4s |
 | Rewrite + re-score (enforcement only) | N/A | N/A | ~2s judge + ~2s rewrite + ~2s re-score = ~6s |
+| Rewrite timeout (enforcement only) | N/A | N/A | ~2s judge + 2s rewrite timeout = ~4s, then ships original with `rewrite-timeout` |
 
 **Flagged responses in enforcement mode accept up to 6s total latency.** This is a deliberate tradeoff — quality matters more than speed on challenge-response turns, which represent ~5–15% of all responses. The previous "sub-3s expectation" applies to the ~85–95% of responses that bypass the judge entirely or pass with score below threshold. For the small fraction that trigger rewrite + re-score, we accept the latency cost because a sycophantic response causes more harm than a 6-second delay.
 
@@ -147,6 +147,11 @@ MODEL_FAMILIES:
 - **Escape hatch**: `KITHGUARD_SKIP_FAMILY_CHECK=true` env var for testing only, logged as a security event
 
 **If someone swaps primary to Mistral**: The gate blocks startup and requires configuring a non-Mistral judge (e.g., swap to a Llama-based or Gemini-based judge model).
+
+**Registry lifecycle:**
+- The model family registry is maintained in `config.yaml` alongside agent configs. The gateway operator is responsible for adding new model aliases when adopting new models
+- **Unknown models** (not matching any family pattern): gate operates in **fail-open with warning** — responses are judged but the family independence guarantee is not enforced. An ops warning fires on every startup with unmapped models. The operator MUST add the model to the registry within 7 days or the gate auto-disables for that model with an escalation alert
+- **Registry updates**: adding a new alias is a minor config change, no rubric recalibration needed
 
 ### 5. Rubric Versioning: Git-versioned, semver, backward-compatible contract
 
@@ -220,15 +225,19 @@ TRIGGER_PATTERNS = [
 - Response follows a user challenge, question, or disagreement (detected via conversation turn analysis)
 - Response proposes undoing prior work (decision reversal detection)
 
-**Judge is bypassed when:**
-- Routine task execution (code generation, file operations, search results)
-- First response in a conversation (no position to capitulate from)
-- Response to a factual question with no prior position taken
-- Agent-to-agent internal messages
+**Judge is bypassed when (deterministic rules):**
+- **Routine task execution**: response consists primarily of code blocks (>50% of content in fenced code blocks), file paths, raw tool/command output, or search results with no editorial commentary
+- **Short responses**: response is <50 characters (too brief to contain meaningful capitulation)
+- **First response** in a conversation (no prior position to capitulate from — turn count = 1)
+- **Factual Q&A**: response to a factual question where the agent has no prior stated position in the conversation context window
+- **Agent-to-agent internal messages**: messages not destined for a user-facing channel (detected via channel metadata)
+- **Explicitly bypassed**: agent config has `enabled: false` (e.g., Scott)
 
-#### Tier 2: Stateful turn analysis (deferred to implementation spec)
+#### Tier 2: Stateful turn analysis (deferred to implementation spec, required before Phase 3)
 
 Conversation context comparison — did the agent have a prior position? Is this response reversing it? Uses the **last 3 conversation turns** as context window. This tier is an architectural commitment; implementation details (embedding similarity, prompt-based classification, etc.) are deferred to the implementation spec.
+
+**Phase dependency:** Phases 1-2 (shadow/advisory) operate on Tier 1 regex only. **Tier 2 MUST be implemented before entering Phase 3 (enforcement)**, because enforcement rewrites responses — false negatives from regex-only triggers risk missing real sycophancy that then gets mechanically reinforced. The acceptance criteria for Tier 2: detect position reversal in ≥3 of the 5 known historical failure cases (Mar 8 consolidation, plus 4 curated from Phase 1-2 data).
 
 #### FP/FN Targets
 
@@ -261,6 +270,8 @@ When a response scores at or above the agent's `rewrite_threshold` (Decision 6),
 
 **Who rewrites:** The **primary model (Opus)** performs the rewrite, NOT Prometheus. Prometheus is a 7B judge model optimized for evaluation — it lacks the generation quality needed for user-facing rewrites. The primary model already has full conversation context.
 
+**Rewrite timeout:** The rewrite call MUST complete within **2 seconds**. If exceeded, the original response ships with `X-KithGuard: rewrite-timeout` metadata. This prevents hanging in enforcement mode. The same 2s budget applies to the optional re-score call.
+
 **How the rewrite works:** The primary model receives a rewrite prompt containing:
 1. The original response (verbatim)
 2. The judge's score and feedback (what was flagged and why)
@@ -286,11 +297,12 @@ All logging occurs **locally on the Mac mini**. No response data is transmitted 
 | Judge scores + metadata (score, rubric version, latency, trigger reason) | **90 days** | No full response text — metadata only, for calibration trending |
 | Full response text | **90 days** | Only stored when score ≥ rewrite threshold (golden set for rubric calibration) |
 
-**Access controls:**
-- Async review logs are accessible **only by the gateway operator (Mike)** via local filesystem
-- **No remote access** and no API exposure of log contents
-- Every access to flagged response logs generates an **audit entry** (timestamp, accessor, action)
-- Purge cron writes a **verification log entry** confirming deletion count and oldest remaining record after each run
+**Access controls (technical):**
+- Log directory: `chmod 700`, owned by the gateway process user (`agentclaw`). No group or world access
+- **No remote access**: no network listeners, no API endpoints, no web UI exposing log contents
+- **No encryption at rest** for MVP (local-only Mac mini with FileVault full-disk encryption provides baseline). Revisit if logs move off-device
+- **Audit trail**: append-only audit log file (`logs/kithguard-audit.log`) records every access to flagged response data — fields: timestamp, accessor UID, action (read/delete), target file. Audit log itself is append-only (no truncation except by purge cron for entries >90 days)
+- Purge cron writes a **verification log entry** confirming: deletion count, oldest remaining record timestamp, SHA-256 hash of the audit log before and after purge
 
 **Privacy constraints:**
 - No PII extraction or storage beyond what exists in the original response
@@ -321,6 +333,28 @@ All logging occurs **locally on the Mac mini**. No response data is transmitted 
   "latency_ms": "integer"
 }
 ```
+
+### Judge Error Schema
+
+When the judge encounters an error (parse failure, invalid score, timeout, Ollama unavailable), it returns:
+
+```json
+{
+  "error": "string (error type: parse_failure | invalid_score | timeout | unavailable)",
+  "detail": "string (human-readable description)",
+  "fallback": "pass",
+  "schema_version": "1.0"
+}
+```
+
+**Error handling rules:**
+- All judge errors result in **fail-open** (response ships unjudged)
+- `parse_failure`: Prometheus returned non-parseable output → log full output for debugging, count toward circuit breaker
+- `invalid_score`: Score outside 1-5 range → treat as parse failure
+- `timeout`: Judge exceeded 2s budget → log latency, count toward circuit breaker
+- `unavailable`: Ollama not responding → count toward circuit breaker
+
+**Schema versioning:** Both input and output schemas include an implicit `schema_version: "1.0"` contract. Breaking changes to schema require a MAJOR version bump and migration path. The gate MUST reject input/output with unrecognized schema versions (fail-open with logging).
 
 ### Gate Metadata Headers
 
@@ -389,10 +423,10 @@ The judge flags responses scoring at or above the agent's `rewrite_threshold` bu
 - Time-to-review for flagged responses
 
 **Exit criteria → Phase 3:**
-- Minimum **50 flagged responses** reviewed by **2 independent reviewers**
+- Minimum **75 flagged responses** reviewed by **2 independent reviewers**
 - Inter-rater agreement ≥ 75% (Cohen's kappa ≥ 0.5)
-- Precision ≥ 80% at 95% confidence interval
-- False positive rate acceptable to ops (no alert fatigue)
+- Observed precision ≥ 80%, with **lower bound of Wilson 95% CI ≥ 68%** (achievable with n=75 at 80% observed precision; Wilson method chosen for small-sample accuracy over Wald)
+- False positive rate ≤ 30% over the review window (concrete threshold — no "acceptable to ops" ambiguity)
 - Rubric updated based on review findings
 - **Hard rollback trigger**: if precision drops below 60% over any rolling 20-sample window, auto-downgrade to advisory mode (or shadow if already in advisory)
 
@@ -452,3 +486,4 @@ Full gate operation — flagged responses are **rewritten before delivery** per 
 | v2 | 2026-03-08 | Principal Engineer Agent | Added score semantics (Decision 8), rewrite mechanism (Decision 9), data retention (Decision 10), rollout strategy, and research citation links |
 | v3 | 2026-03-08 | The Dude | Fixed retention contradiction (Decision 2 ↔ 10), exact citation URLs for Frame Gravity + CONSENSAGENT, added rewrite retry cap (max 1 attempt) |
 | v4 | 2026-03-08 | Principal Engineer Agent | Addressed 8 reviewer gaps: (1) latency budget table by mode/path, (2) per-agent rewrite/block thresholds replacing global hardcode, (3) tiered trigger architecture with FP/FN targets, (4) research evidence hierarchy with source→decision mapping, (5) tightened rollout exit criteria with inter-rater agreement and hard rollback triggers, (6) reliability SLOs for unjudged rate and circuit breaker, (7) interface contract with JSON schemas and sequence diagram, (8) retention access controls and audit trail |
+| v5 | 2026-03-08 | The Dude (Opus 4.6) | Final polish for 9.5 target: (1) rewrite timeout 2s MUST with fallback, (2) CONSENSAGENT moved to Tier 2 with note on pending proceedings link, (3) statistical gate specified — Wilson CI, n=75, lower bound ≥68%, (4) Tier 2 triggers gated on Phase 3 with acceptance criteria, (5) model registry lifecycle — unknown model handling + 7-day deadline, (6) technical security controls — chmod 700, append-only audit, SHA-256 purge verification, (7) deterministic bypass rules with examples, (8) error schema + schema versioning contract |
