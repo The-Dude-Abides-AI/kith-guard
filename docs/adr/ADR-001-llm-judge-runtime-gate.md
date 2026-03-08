@@ -15,8 +15,8 @@ Kith Guard is a **pre-send quality gate** that uses an LLM judge to score agent 
 - **[SycEval](https://arxiv.org/abs/2502.08177)** — 78.5% persistence rate once sycophancy triggers. The first capitulation must be caught; subsequent turns reinforce the pattern.
 - **[Cupcake](https://github.com/eqtylab/cupcake) (eqtylab)** — Prior art for agent policy enforcement. They pivoted from OS-level monitoring to native agent hooks. Pattern: Intercept → Evaluate → Block/Modify/Auto-correct.
 - **[MIRROR Architecture](https://arxiv.org/abs/2506.00430)** — Two-layer design (Thinker + Talker). Our pre-send hook implements the Thinker layer.
-- **[Frame Gravity](https://x.com) (David Wall)** — Rewrite strategy must force position-first framing, not merely remove agreement tokens. Concept from X/Twitter discourse on LLM behavioral framing.
-- **[CONSENSAGENT](https://aclanthology.org/) (Pitre et al., ACL 2025)** — Sycophancy compounds in multi-agent systems; judging only the terminal output is insufficient.
+- **[Frame Gravity](https://x.com/DavidWall9987/status/2028918816856784915) (David Wall)** — Rewrite strategy must force position-first framing, not merely remove agreement tokens. Concept from X/Twitter discourse on LLM behavioral framing.
+- **[CONSENSAGENT](https://x.com/priyapitre/status/1926148257584996824) (Pitre et al., ACL 2025 Findings)** — Sycophancy compounds in multi-agent systems; judging only the terminal output is insufficient.
 - **[OpenAI April 2025 Sycophancy Rollback](https://openai.com/index/expanding-on-sycophancy/)** — GPT-4o approval-optimization regression that prompted industry-wide attention to sycophancy in production.
 - **Local research**: [`docs/llm-as-a-judge-research.md`](../llm-as-a-judge-research.md) — detailed evaluation of judge models and rubric design.
 
@@ -77,7 +77,7 @@ When the judge (Prometheus/Ollama) is unavailable:
 
 - **Fail-open**: Responses ship unjudged with `X-KithGuard: unavailable` metadata
 - **Circuit breaker**: After 3 consecutive failures in 60 seconds, bypass the judge for 5 minutes (avoid hammering a crashed Ollama)
-- **Logging**: Every unjudged response is logged with full context for async batch review
+- **Logging**: Every unjudged response is logged with metadata (timestamp, agent, channel, trigger reason) for async batch review. Full response text is retained per Decision 10 retention policy (7 days for unjudged responses)
 - **Alert**: If judge is down for >10 minutes, notify ops channel
 
 This is NOT a pure fail-open. The logging + async review creates a safety net. We accept the risk of a sycophantic response shipping because blocking all responses when a local service hiccups is worse for the system's overall reliability. The Mac mini running Ollama will have memory pressure events, updates, and restarts — we can't let that brick the entire agent system.
@@ -211,7 +211,9 @@ When a response scores ≥ 3, it enters the rewrite pipeline:
 
 **When:** Only on score ≥ 3. Scores 1–2 pass through untouched — no rewrite overhead.
 
-**Cost:** One additional primary model call (~1–2s) on top of the judge call. Total worst-case for a flagged+rewritten response: **~4s** (2s judge + 2s rewrite). This only applies to the ~5–15% of responses expected to trigger the judge, of which a fraction will score ≥ 3.
+**Retry cap:** Maximum **1 rewrite attempt**. If the rewritten response is re-scored and still scores ≥ 3, it ships anyway with `X-KithGuard: rewrite-failed` metadata. Rationale: an infinite rewrite loop is worse than one sycophantic response. The failure is logged for rubric calibration — persistent rewrite failures indicate the rubric or rewrite template needs tuning, not that the gate should keep retrying.
+
+**Cost:** One additional primary model call (~1–2s) on top of the judge call. Total worst-case for a flagged+rewritten response: **~4s** (2s judge + 2s rewrite). This only applies to the ~5–15% of responses expected to trigger the judge, of which a fraction will score ≥ 3. Note: re-scoring the rewrite is optional in Phase 1-2 (shadow/advisory) and recommended in Phase 3 (enforcement) — adding ~2s for the re-score when enabled.
 
 ### 10. Data Retention: Privacy and Log Lifecycle
 
@@ -219,7 +221,7 @@ All logging occurs **locally on the Mac mini**. No response data is transmitted 
 
 | Data Type | Retention | Condition |
 | --- | --- | --- |
-| Unjudged responses (timeout/unavailable) | **7 days** | Logged for async review, then purged |
+| Unjudged responses (timeout/unavailable) | **7 days** | Full response text + metadata logged for async review, then purged. These have no score, so full text is needed for manual review |
 | Judge scores + metadata (score, rubric version, latency, trigger reason) | **90 days** | No full response text — metadata only, for calibration trending |
 | Full response text | **90 days** | Only stored when score ≥ 3 (golden set for rubric calibration) |
 
@@ -314,3 +316,4 @@ Full gate operation — flagged responses are **rewritten before delivery** per 
 | --- | --- | --- | --- |
 | v1 | 2026-03-08 | Principal Engineer Agent | Initial ADR — 7 architectural decisions for Kith Guard runtime sycophancy gate |
 | v2 | 2026-03-08 | Principal Engineer Agent | Added score semantics (Decision 8), rewrite mechanism (Decision 9), data retention (Decision 10), rollout strategy, and research citation links |
+| v3 | 2026-03-08 | The Dude | Fixed retention contradiction (Decision 2 ↔ 10), exact citation URLs for Frame Gravity + CONSENSAGENT, added rewrite retry cap (max 1 attempt) |
