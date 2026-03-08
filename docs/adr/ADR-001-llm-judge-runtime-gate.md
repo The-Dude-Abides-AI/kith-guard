@@ -284,7 +284,11 @@ When a response scores at or above the agent's `rewrite_threshold` (Decision 6),
 
 **Who rewrites:** The **primary model (Opus)** performs the rewrite, NOT Prometheus. Prometheus is a 7B judge model optimized for evaluation — it lacks the generation quality needed for user-facing rewrites. The primary model already has full conversation context.
 
-**Rewrite timeout:** The rewrite call MUST complete within **2 seconds**. If exceeded, the original response ships with `X-KithGuard: rewrite-timeout` metadata. This prevents hanging in enforcement mode. The same 2s budget applies to the optional re-score call.
+**Rewrite timeout:** The rewrite call MUST complete within **2 seconds**. Timeout behavior differs by gate action:
+- **REWRITE** (score ≥ rewrite_threshold, < block_threshold): on timeout, the **original response ships** with `X-KithGuard: rewrite-timeout`. The original was acceptable enough to not block — a failed rewrite is better than no response.
+- **BLOCK_AND_REWRITE** (score ≥ block_threshold): on timeout, the original response MUST NOT ship (it was blocked for a reason). Instead: retry the rewrite once with a fresh 2s budget. If the retry also times out, ship a **generic fallback** ("Let me reconsider and follow up") with `X-KithGuard: block-timeout` and log the full original + context for async review. This preserves the block semantic at the cost of a degraded response.
+
+The same 2s budget applies to the optional re-score call.
 
 **How the rewrite works:** The primary model receives a rewrite prompt containing:
 1. The original response (verbatim)
@@ -380,7 +384,7 @@ Every response passing through Kith Guard carries these headers:
 
 | Header | Values | Description |
 | --- | --- | --- |
-| `X-KithGuard` | `pass` · `rewrite` · `block` · `timeout` · `unavailable` · `rewrite-failed` · `rewrite-timeout` · `bypassed` · `family-violation` | Gate disposition |
+| `X-KithGuard` | `pass` · `rewrite` · `block` · `timeout` · `unavailable` · `rewrite-failed` · `rewrite-timeout` · `block-timeout` · `bypassed` · `family-violation` | Gate disposition |
 | `X-KithGuard-Score` | `1`–`5` | Judge score (absent on bypass/timeout/unavailable) |
 | `X-KithGuard-Latency` | integer (ms) | Total gate processing time |
 | `X-KithGuard-Rubric` | e.g. `sycophancy-v1.0` | Rubric version used for scoring |
@@ -397,17 +401,28 @@ User msg → Primary Model → Response
                Prometheus Judge    Deliver
                       │            (X-KithGuard: bypassed)
                       │
-              Score < rewrite_threshold
+              Score < rewrite_threshold?
                  │              │
                 YES             NO
                  │              │
-              Deliver     Rewrite (Primary Model)
-         (X-KithGuard:        │
-              pass)      [Optional re-score]
-                               │
-                            Deliver
-                       (X-KithGuard: rewrite
-                        or rewrite-failed)
+              Deliver     Score < block_threshold?
+         (X-KithGuard:    │              │
+              pass)       YES             NO
+                           │              │
+                       REWRITE      BLOCK_AND_REWRITE
+                      (substitute)  (suppress original)
+                           │              │
+                    Rewrite (Primary)  Rewrite (Primary)
+                           │              │
+                    [Optional re-score]  [Optional re-score]
+                           │              │
+                        Deliver        Deliver rewrite ONLY
+                   (X-KithGuard:    (X-KithGuard: block)
+                    rewrite)        Original never ships
+                           │              │
+                    On timeout:     On timeout:
+                    ship original   HOLD — do not ship
+                    (rewrite-timeout) (block-timeout, retry once)
 ```
 
 ## Operational Ownership
