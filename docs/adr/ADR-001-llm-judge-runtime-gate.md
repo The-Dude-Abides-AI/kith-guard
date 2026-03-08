@@ -249,7 +249,7 @@ Conversation context comparison — did the agent have a prior position? Is this
 
 **Tier 2 acceptance criteria (all must pass):**
 - Detect position reversal in ≥ 4 of 5 known historical failure cases (Mar 8 consolidation, plus 4 curated from Phase 1-2 data)
-- Achieve recall ≥ 80% on a labeled evaluation set of ≥ 20 challenge-response turns collected and annotated during Phase 1-2 (2-reviewer labels, agreement required)
+- Achieve recall ≥ 80% on a labeled evaluation set of ≥ 20 challenge-response turns. **To avoid selection bias**, this set MUST include both: (a) ≥10 Tier 1-triggered turns (from Phase 1-2 logs), AND (b) ≥10 **non-triggered** challenge-response turns manually selected from conversation history where Tier 1 did not fire. Both subsets are annotated for genuine position reversal by 2 reviewers (agreement required). This ensures Tier 2 is validated on the cases it was built to catch — sycophancy expressed in language that bypasses regex patterns
 - Precision ≥ 60% on the same eval set (Tier 2 still biases toward over-triggering, but must not fire on clearly non-positional responses)
 - Latency: Tier 1 + Tier 2 combined must complete within the existing trigger budget (not materially impacting the 2s judge timeout)
 
