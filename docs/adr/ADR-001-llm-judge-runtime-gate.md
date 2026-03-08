@@ -24,7 +24,7 @@ Sources are classified by evidence tier and mapped to specific design decisions.
 
 | Source | Citation | Design Impact |
 | --- | --- | --- |
-| **CONSENSAGENT** | [Pitre et al., ACL 2025 Findings](https://x.com/priyapitre/status/1926148257584996824) — Sycophancy compounds in multi-agent systems. Peer-reviewed (ACL Findings), cited via author announcement; full proceedings link pending | → Decision 3: multi-agent scope; Decision 6: per-agent config with independent thresholds |
+| **CONSENSAGENT** | [Pitre et al., ACL 2025 Findings](https://x.com/priyapitre/status/1926148257584996824) — Sycophancy compounds in multi-agent systems. Peer-reviewed (ACL Findings), cited via author announcement; full proceedings link pending | → Decision 3: multi-agent scope; Decision 6: per-agent config with independent thresholds. **Note:** Multi-agent sycophancy compounding is also independently validated by our own observation (Mar 8, 2026 — The Dude capitulated on ticket scope after sub-agent interaction). Design impact does not depend solely on this citation |
 | **OpenAI April 2025 Sycophancy Rollback** | [Official blog post](https://openai.com/index/expanding-on-sycophancy/) — GPT-4o approval-optimization regression | → Decision 1: quality > speed tradeoff on flagged turns |
 | **Cupcake** | [eqtylab/cupcake](https://github.com/eqtylab/cupcake) — Production OSS agent policy enforcement | → Decision 2: fail-open pattern; intercept → evaluate → block/modify architecture |
 
@@ -237,7 +237,13 @@ TRIGGER_PATTERNS = [
 
 Conversation context comparison — did the agent have a prior position? Is this response reversing it? Uses the **last 3 conversation turns** as context window. This tier is an architectural commitment; implementation details (embedding similarity, prompt-based classification, etc.) are deferred to the implementation spec.
 
-**Phase dependency:** Phases 1-2 (shadow/advisory) operate on Tier 1 regex only. **Tier 2 MUST be implemented before entering Phase 3 (enforcement)**, because enforcement rewrites responses — false negatives from regex-only triggers risk missing real sycophancy that then gets mechanically reinforced. The acceptance criteria for Tier 2: detect position reversal in ≥3 of the 5 known historical failure cases (Mar 8 consolidation, plus 4 curated from Phase 1-2 data).
+**Phase dependency:** Phases 1-2 (shadow/advisory) operate on Tier 1 regex only. **Tier 2 MUST be implemented before entering Phase 3 (enforcement)**, because enforcement rewrites responses — false negatives from regex-only triggers risk missing real sycophancy that then gets mechanically reinforced.
+
+**Tier 2 acceptance criteria (all must pass):**
+- Detect position reversal in ≥ 4 of 5 known historical failure cases (Mar 8 consolidation, plus 4 curated from Phase 1-2 data)
+- Achieve recall ≥ 80% on a labeled evaluation set of ≥ 20 challenge-response turns collected and annotated during Phase 1-2 (2-reviewer labels, agreement required)
+- Precision ≥ 60% on the same eval set (Tier 2 still biases toward over-triggering, but must not fire on clearly non-positional responses)
+- Latency: Tier 1 + Tier 2 combined must complete within the existing trigger budget (not materially impacting the 2s judge timeout)
 
 #### FP/FN Targets
 
@@ -301,7 +307,9 @@ All logging occurs **locally on the Mac mini**. No response data is transmitted 
 - Log directory: `chmod 700`, owned by the gateway process user (`agentclaw`). No group or world access
 - **No remote access**: no network listeners, no API endpoints, no web UI exposing log contents
 - **No encryption at rest** for MVP (local-only Mac mini with FileVault full-disk encryption provides baseline). Revisit if logs move off-device
-- **Audit trail**: append-only audit log file (`logs/kithguard-audit.log`) records every access to flagged response data — fields: timestamp, accessor UID, action (read/delete), target file. Audit log itself is append-only (no truncation except by purge cron for entries >90 days)
+- **Audit trail**: append-only audit log file (`logs/kithguard-audit.log`) records every access to flagged response data — fields: timestamp, accessor UID, action (read/delete), target file
+- **Append-only enforcement**: on macOS, the audit log uses `chflags uappend` (user append-only flag) preventing modification or truncation by non-root processes. On Linux, equivalent is `chattr +a`. The gateway process writes new entries; only the purge cron (running as root) can remove entries >90 days by temporarily clearing the flag, truncating, and re-setting it
+- **Integrity verification**: a SHA-256 rolling hash is appended to the audit log every 24h by cron. The hash covers all entries since the previous hash entry. On purge, the pre-purge and post-purge hashes are both recorded, creating a verifiable chain
 - Purge cron writes a **verification log entry** confirming: deletion count, oldest remaining record timestamp, SHA-256 hash of the audit log before and after purge
 
 **Privacy constraints:**
@@ -315,6 +323,7 @@ All logging occurs **locally on the Mac mini**. No response data is transmitted 
 
 ```json
 {
+  "schema_version": "1.0",
   "conversation_context": "string (last 3 turns)",
   "proposed_response": "string",
   "agent_id": "string",
@@ -327,6 +336,7 @@ All logging occurs **locally on the Mac mini**. No response data is transmitted 
 
 ```json
 {
+  "schema_version": "1.0",
   "score": "integer 1-5",
   "feedback": "string",
   "flagged_patterns": ["string"],
@@ -354,7 +364,7 @@ When the judge encounters an error (parse failure, invalid score, timeout, Ollam
 - `timeout`: Judge exceeded 2s budget → log latency, count toward circuit breaker
 - `unavailable`: Ollama not responding → count toward circuit breaker
 
-**Schema versioning:** Both input and output schemas include an implicit `schema_version: "1.0"` contract. Breaking changes to schema require a MAJOR version bump and migration path. The gate MUST reject input/output with unrecognized schema versions (fail-open with logging).
+**Schema versioning:** Both input and output schemas include an explicit `schema_version` field. Breaking changes to schema require a MAJOR version bump (1.0 → 2.0) and migration path. The gate MUST reject input/output with unrecognized schema versions (fail-open with logging). Backward-compatible additions (new optional fields) increment MINOR (1.0 → 1.1) and do not require rejection.
 
 ### Gate Metadata Headers
 
@@ -391,6 +401,19 @@ User msg → Primary Model → Response
                        (X-KithGuard: rewrite
                         or rewrite-failed)
 ```
+
+## Operational Ownership
+
+| Responsibility | Owner | Approval Required |
+| --- | --- | --- |
+| **Threshold tuning** (per-agent rewrite/block thresholds) | The Dude (proposes) + Mike (approves) | Mike sign-off before enforcement-mode changes |
+| **Rubric MINOR bump** (new patterns, refined descriptions) | The Dude or Scott | Golden test set must pass; no additional approval |
+| **Rubric MAJOR bump** (score semantics change) | The Dude (proposes) + Mike (approves) | Mike sign-off + recalibration plan documented |
+| **Phase transitions** (shadow → advisory → enforcement) | The Dude (proposes based on exit criteria) | Mike sign-off |
+| **Incident response** (judge down, unjudged rate SLO breach) | The Dude (auto-mitigates via circuit breaker/SLO rules) | No approval needed for auto-downgrade; manual escalation to Mike if down >30 min |
+| **Incident response SLA** | 4 hours during business hours (9am–6pm PST), next business day outside hours | — |
+| **Model family registry updates** | The Dude (adds new aliases) | No approval for additions; removals require Mike sign-off |
+| **Monthly precision audits** (Phase 3) | The Dude (executes) + Mike (reviews findings) | Audit results posted to ops channel |
 
 ## Rollout Strategy
 
@@ -487,3 +510,4 @@ Full gate operation — flagged responses are **rewritten before delivery** per 
 | v3 | 2026-03-08 | The Dude | Fixed retention contradiction (Decision 2 ↔ 10), exact citation URLs for Frame Gravity + CONSENSAGENT, added rewrite retry cap (max 1 attempt) |
 | v4 | 2026-03-08 | Principal Engineer Agent | Addressed 8 reviewer gaps: (1) latency budget table by mode/path, (2) per-agent rewrite/block thresholds replacing global hardcode, (3) tiered trigger architecture with FP/FN targets, (4) research evidence hierarchy with source→decision mapping, (5) tightened rollout exit criteria with inter-rater agreement and hard rollback triggers, (6) reliability SLOs for unjudged rate and circuit breaker, (7) interface contract with JSON schemas and sequence diagram, (8) retention access controls and audit trail |
 | v5 | 2026-03-08 | The Dude (Opus 4.6) | Final polish for 9.5 target: (1) rewrite timeout 2s MUST with fallback, (2) CONSENSAGENT moved to Tier 2 with note on pending proceedings link, (3) statistical gate specified — Wilson CI, n=75, lower bound ≥68%, (4) Tier 2 triggers gated on Phase 3 with acceptance criteria, (5) model registry lifecycle — unknown model handling + 7-day deadline, (6) technical security controls — chmod 700, append-only audit, SHA-256 purge verification, (7) deterministic bypass rules with examples, (8) error schema + schema versioning contract |
+| v6 | 2026-03-08 | The Dude (Opus 4.6) | 9.5 push: (1) explicit schema_version in JSON schemas + backward-compat rules, (2) Tier 2 acceptance strengthened — recall ≥80%/precision ≥60% on ≥20 labeled eval set, (3) CONSENSAGENT design impact validated by independent Mar 8 observation, (4) append-only audit operationalized — chflags uappend + SHA-256 rolling hash chain, (5) operational ownership table — threshold/rubric/phase/incident owners + SLAs |
