@@ -372,7 +372,7 @@ When the judge encounters an error (parse failure, invalid score, timeout, Ollam
 - `timeout`: Judge exceeded 2s budget → log latency, count toward circuit breaker
 - `unavailable`: Ollama not responding → count toward circuit breaker
 
-**Schema versioning:** Both input and output schemas include an explicit `schema_version` field. Breaking changes to schema require a MAJOR version bump (1.0 → 2.0) and migration path. The gate MUST reject input/output with unrecognized schema versions (fail-open with logging). Backward-compatible additions (new optional fields) increment MINOR (1.0 → 1.1) and do not require rejection.
+**Schema versioning:** Both input and output schemas include an explicit `schema_version` field. Version matching uses **MAJOR-only comparison**: the gate accepts any input/output whose MAJOR version matches its own (a `1.0` gate accepts `1.1`, `1.2`, etc.) and rejects on MAJOR mismatch (`2.0` → fail-open with logging). MINOR bumps add optional fields and are always backward-compatible. MAJOR bumps are breaking changes requiring a migration path.
 
 ### Gate Metadata Headers
 
