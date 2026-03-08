@@ -181,7 +181,13 @@ agents:
     block_threshold: 5
   scott:
     enabled: false          # Scott does execution, not opinions
+  donny:
+    rubric: sycophancy-v1.0
+    rewrite_threshold: 3    # defaults; calibrate after Phase 1 data
+    block_threshold: 4
 ```
+
+**Unconfigured agent fallback:** If a new agent is added to the system without a corresponding config entry, the gate applies default thresholds (`rewrite_threshold: 3`, `block_threshold: 4`, `rubric: sycophancy-v1.0`) and emits a startup warning. The operator MUST add an explicit config entry before entering Phase 3 (enforcement). This prevents both silent pass-through and startup crashes when agents are added.
 
 **Canonical gate decision function:**
 
