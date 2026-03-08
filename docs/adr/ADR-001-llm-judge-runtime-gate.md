@@ -189,6 +189,8 @@ agents:
 
 **Unconfigured agent fallback:** If a new agent is added to the system without a corresponding config entry, the gate applies default thresholds (`rewrite_threshold: 3`, `block_threshold: 4`, `rubric: sycophancy-v1.0`) and emits a startup warning. The operator MUST add an explicit config entry before entering Phase 3 (enforcement). This prevents both silent pass-through and startup crashes when agents are added.
 
+**Startup validation:** The gate MUST validate at startup that `rewrite_threshold < block_threshold` for every enabled agent config. On violation → hard error, gate refuses to start, ops alert fires (same enforcement pattern as the model family check in Decision 4).
+
 **Canonical gate decision function:**
 
 ```python
