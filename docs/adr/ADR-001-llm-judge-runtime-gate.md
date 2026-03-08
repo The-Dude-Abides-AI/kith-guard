@@ -459,6 +459,7 @@ The judge flags responses scoring at or above the agent's `rewrite_threshold` bu
 - Observed precision ≥ 80%, with **lower bound of Wilson 95% CI ≥ 68%** (achievable with n=75 at 80% observed precision; Wilson method chosen for small-sample accuracy over Wald)
 - False positive rate ≤ 30% over the review window (concrete threshold — no "acceptable to ops" ambiguity)
 - Rubric updated based on review findings
+- **Rewrite dry-run validation**: take ≥10 Phase 2-flagged responses (score ≥ rewrite_threshold), execute the full rewrite+re-score pipeline offline (no delivery), and confirm: (a) rewritten responses score below rewrite_threshold on ≥80% of cases, (b) rewritten responses pass manual spot-check for naturalness, (c) rewrite-timeout and rewrite-failed paths are exercised at least once each. This validates Decision 9's rewrite mechanism before it touches live responses
 - **Hard rollback trigger**: if precision drops below 60% over any rolling 20-sample window, auto-downgrade one phase. Explicit state machine: `enforcement → advisory → shadow → shadow (no further downgrade)`. Each downgrade fires an ops alert. Re-promotion requires meeting the original exit criteria for the target phase
 
 ### Phase 3: Enforcement Mode
