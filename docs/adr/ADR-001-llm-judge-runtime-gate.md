@@ -150,7 +150,7 @@ MODEL_FAMILIES:
 
 **Registry lifecycle:**
 - The model family registry is maintained in `config.yaml` alongside agent configs. The gateway operator is responsible for adding new model aliases when adopting new models
-- **Unknown models** (not matching any family pattern): gate operates in **fail-open with warning** — responses are judged but the family independence guarantee is not enforced. An ops warning fires on every startup with unmapped models. The operator MUST add the model to the registry within 7 days or the gate auto-disables for that model with an escalation alert
+- **Unknown models** (not matching any family pattern): gate operates in **fail-open with warning** — responses are judged but the family independence guarantee is not enforced. An ops warning fires on every startup with unmapped models. The operator MUST add the model to the registry within 7 days or the gate auto-disables for that model with an escalation alert. **Family comparison with unknowns:** when one or both models are unrecognized, the family match check MUST be treated as **inconclusive** (not True, not False) — the gate proceeds in fail-open-with-warning mode and MUST NOT trigger the hard error path. This prevents false positives when two unknown-but-different-family models both resolve to the same sentinel value (e.g., `None == None`)
 - **Registry updates**: adding a new alias is a minor config change, no rubric recalibration needed
 
 ### 5. Rubric Versioning: Git-versioned, semver, backward-compatible contract
