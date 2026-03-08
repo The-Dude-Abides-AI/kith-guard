@@ -24,7 +24,7 @@ Sources are classified by evidence tier and mapped to specific design decisions.
 
 | Source | Citation | Design Impact |
 | --- | --- | --- |
-| **CONSENSAGENT** | [Pitre et al., ACL 2025 Findings](https://x.com/priyapitre/status/1926148257584996824) — Sycophancy compounds in multi-agent systems. Peer-reviewed (ACL Findings), cited via author announcement; full proceedings link pending | → Decision 3: multi-agent scope; Decision 6: per-agent config with independent thresholds. **Note:** Multi-agent sycophancy compounding is also independently validated by our own observation (Mar 8, 2026 — The Dude capitulated on ticket scope after sub-agent interaction). Design impact does not depend solely on this citation |
+| **CONSENSAGENT** | [Pitre et al., ACL 2025 Findings](https://x.com/priyapitre/status/1926148257584996824) — Sycophancy compounds in multi-agent systems. Peer-reviewed (ACL 2025 Findings), cited via author announcement; proceedings not yet published as of March 2026 | → Decision 3: multi-agent scope; Decision 6: per-agent config with independent thresholds. **Note:** Multi-agent sycophancy compounding is also independently validated by our own observation (Mar 8, 2026 — The Dude capitulated on ticket scope after sub-agent interaction). Design impact does not depend solely on this citation |
 | **OpenAI April 2025 Sycophancy Rollback** | [Official blog post](https://openai.com/index/expanding-on-sycophancy/) — GPT-4o approval-optimization regression | → Decision 1: quality > speed tradeoff on flagged turns |
 | **Cupcake** | [eqtylab/cupcake](https://github.com/eqtylab/cupcake) — Production OSS agent policy enforcement | → Decision 2: fail-open pattern; intercept → evaluate → block/modify architecture |
 
@@ -235,7 +235,7 @@ TRIGGER_PATTERNS = [
 
 #### Tier 2: Stateful turn analysis (deferred to implementation spec, required before Phase 3)
 
-Conversation context comparison — did the agent have a prior position? Is this response reversing it? Uses the **last 3 conversation turns** as context window. This tier is an architectural commitment; implementation details (embedding similarity, prompt-based classification, etc.) are deferred to the implementation spec.
+Conversation context comparison — did the agent have a prior position? Is this response reversing it? Uses the **last 3 conversation turns** as context window. This tier is an architectural commitment; implementation details (embedding similarity, prompt-based classification, etc.) are **deliberately deferred to a companion implementation spec** (to be written as part of AC5 in DUDE-375). The ADR defines the acceptance criteria and phase gate; the implementation spec will define the algorithm.
 
 **Phase dependency:** Phases 1-2 (shadow/advisory) operate on Tier 1 regex only. **Tier 2 MUST be implemented before entering Phase 3 (enforcement)**, because enforcement rewrites responses — false negatives from regex-only triggers risk missing real sycophancy that then gets mechanically reinforced.
 
@@ -451,7 +451,7 @@ The judge flags responses scoring at or above the agent's `rewrite_threshold` bu
 - Observed precision ≥ 80%, with **lower bound of Wilson 95% CI ≥ 68%** (achievable with n=75 at 80% observed precision; Wilson method chosen for small-sample accuracy over Wald)
 - False positive rate ≤ 30% over the review window (concrete threshold — no "acceptable to ops" ambiguity)
 - Rubric updated based on review findings
-- **Hard rollback trigger**: if precision drops below 60% over any rolling 20-sample window, auto-downgrade to advisory mode (or shadow if already in advisory)
+- **Hard rollback trigger**: if precision drops below 60% over any rolling 20-sample window, auto-downgrade one phase. Explicit state machine: `enforcement → advisory → shadow → shadow (no further downgrade)`. Each downgrade fires an ops alert. Re-promotion requires meeting the original exit criteria for the target phase
 
 ### Phase 3: Enforcement Mode
 
@@ -465,9 +465,9 @@ Full gate operation — flagged responses are **rewritten before delivery** per 
 
 **Ongoing quality assurance:**
 - **Monthly precision audit**: 20 random flagged responses reviewed by 2 reviewers
-- **Hard rollback trigger**: if precision drops below 60% over any rolling 20-sample window, auto-downgrade to advisory mode
+- **Hard rollback trigger**: if precision drops below 60% over any rolling 20-sample window, auto-downgrade one phase (`enforcement → advisory`). Follows the same state machine as Phase 2
 
-**Rollback:** Any phase can revert to the previous phase via a single config change (`mode: shadow | advisory | enforcement`).
+**Rollback:** Any phase can revert to the previous phase via a single config change (`mode: shadow | advisory | enforcement`). Manual rollback skips the state machine — operator can jump to any phase. Auto-rollback always steps down one phase at a time.
 
 ## Consequences
 
@@ -511,3 +511,4 @@ Full gate operation — flagged responses are **rewritten before delivery** per 
 | v4 | 2026-03-08 | Principal Engineer Agent | Addressed 8 reviewer gaps: (1) latency budget table by mode/path, (2) per-agent rewrite/block thresholds replacing global hardcode, (3) tiered trigger architecture with FP/FN targets, (4) research evidence hierarchy with source→decision mapping, (5) tightened rollout exit criteria with inter-rater agreement and hard rollback triggers, (6) reliability SLOs for unjudged rate and circuit breaker, (7) interface contract with JSON schemas and sequence diagram, (8) retention access controls and audit trail |
 | v5 | 2026-03-08 | The Dude (Opus 4.6) | Final polish for 9.5 target: (1) rewrite timeout 2s MUST with fallback, (2) CONSENSAGENT moved to Tier 2 with note on pending proceedings link, (3) statistical gate specified — Wilson CI, n=75, lower bound ≥68%, (4) Tier 2 triggers gated on Phase 3 with acceptance criteria, (5) model registry lifecycle — unknown model handling + 7-day deadline, (6) technical security controls — chmod 700, append-only audit, SHA-256 purge verification, (7) deterministic bypass rules with examples, (8) error schema + schema versioning contract |
 | v6 | 2026-03-08 | The Dude (Opus 4.6) | 9.5 push: (1) explicit schema_version in JSON schemas + backward-compat rules, (2) Tier 2 acceptance strengthened — recall ≥80%/precision ≥60% on ≥20 labeled eval set, (3) CONSENSAGENT design impact validated by independent Mar 8 observation, (4) append-only audit operationalized — chflags uappend + SHA-256 rolling hash chain, (5) operational ownership table — threshold/rubric/phase/incident owners + SLAs |
+| v7 | 2026-03-08 | The Dude (Opus 4.6) | Final 3: (1) Tier 2 deferral explicitly acknowledged as deliberate with companion impl spec reference, (2) CONSENSAGENT citation clarified — proceedings not yet published as of March 2026, (3) phase rollback state machine made explicit — enforcement→advisory→shadow, one step at a time for auto, any-jump for manual |
