@@ -143,7 +143,7 @@ MODEL_FAMILIES:
 
 - At startup, Kith Guard resolves the primary model family and the judge model family from a maintained registry
 - If families match → **hard error**, gate refuses to start, ops alert fires
-- If primary model changes at runtime → family check re-evaluates on next invocation
+- If primary model changes at runtime → family check re-evaluates on next invocation. **On runtime family match:** the current response ships unjudged with `X-KithGuard: family-violation` metadata, the gate disables judging for all subsequent invocations, and an **incident escalation** fires (not just an ops alert). Judging remains disabled until the operator resolves the family conflict and explicitly re-enables the gate. This is stricter than the circuit breaker (Decision 2) because a family violation is a security invariant breach, not an operational hiccup
 - **Escape hatch**: `KITHGUARD_SKIP_FAMILY_CHECK=true` env var for testing only, logged as a security event
 
 **If someone swaps primary to Mistral**: The gate blocks startup and requires configuring a non-Mistral judge (e.g., swap to a Llama-based or Gemini-based judge model).
@@ -380,7 +380,7 @@ Every response passing through Kith Guard carries these headers:
 
 | Header | Values | Description |
 | --- | --- | --- |
-| `X-KithGuard` | `pass` · `rewrite` · `block` · `timeout` · `unavailable` · `rewrite-failed` · `bypassed` | Gate disposition |
+| `X-KithGuard` | `pass` · `rewrite` · `block` · `timeout` · `unavailable` · `rewrite-failed` · `rewrite-timeout` · `bypassed` · `family-violation` | Gate disposition |
 | `X-KithGuard-Score` | `1`–`5` | Judge score (absent on bypass/timeout/unavailable) |
 | `X-KithGuard-Latency` | integer (ms) | Total gate processing time |
 | `X-KithGuard-Rubric` | e.g. `sycophancy-v1.0` | Rubric version used for scoring |
