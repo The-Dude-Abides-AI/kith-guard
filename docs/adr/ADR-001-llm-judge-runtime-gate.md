@@ -111,7 +111,8 @@ When the judge (Prometheus/Ollama) is unavailable:
 
 | Metric | Threshold | Action |
 | --- | --- | --- |
-| Unjudged rate | > 20% over rolling 1-hour window | Auto-downgrade to shadow mode + ops alert |
+| Unjudged rate (non-circuit-breaker) | > 20% over rolling 1-hour window | Auto-downgrade to shadow mode + ops alert. **Circuit-breaker-induced unjudged responses are excluded from this calculation** — the circuit breaker is a known, self-healing mechanism with its own escalation path (30-min continuous → incident). The SLO catches unjudged responses from other causes (parse failures, unexpected errors, timeouts outside circuit breaker windows) |
+| Unjudged rate (all causes including circuit breaker) | > 50% over rolling 1-hour window | Auto-downgrade to shadow mode regardless of cause — if more than half of responses are unjudged for any reason, the gate is not providing value |
 | Circuit breaker open time | > 30 minutes continuous | Incident escalation (not just ops alert) |
 | Recovery after Ollama restart | 3 consecutive successful judgments | Auto-restore previous mode (advisory/enforcement) |
 
