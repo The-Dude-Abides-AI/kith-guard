@@ -93,6 +93,7 @@ The judge evaluation MUST complete within **2 seconds**. If the timeout is excee
 | Rewrite + re-score (enforcement only) | N/A | N/A | ~2s judge + ~2s rewrite + ~2s re-score = ~6s |
 | Rewrite timeout — REWRITE path (enforcement only) | N/A | N/A | ~2s judge + 2s rewrite timeout = ~4s, then ships original with `rewrite-timeout` |
 | Rewrite timeout — BLOCK_AND_REWRITE path (enforcement only) | N/A | N/A | ~2s judge + 2s rewrite timeout + 2s retry timeout = ~6s, then ships generic fallback with `block-timeout` |
+| Re-score timeout — BLOCK_AND_REWRITE path (enforcement only) | N/A | N/A | ~2s judge + ~2s rewrite + 2s re-score timeout = ~6s, then ships generic fallback with `block-timeout` (cannot confirm rewrite cleared block threshold) |
 
 **Flagged responses in enforcement mode accept up to 6s total latency.** This is a deliberate tradeoff — quality matters more than speed on challenge-response turns, which represent ~5–15% of all responses. The previous "sub-3s expectation" applies to the ~85–95% of responses that bypass the judge entirely or pass with score below threshold. For the small fraction that trigger rewrite + re-score, we accept the latency cost because a sycophantic response causes more harm than a 6-second delay.
 
