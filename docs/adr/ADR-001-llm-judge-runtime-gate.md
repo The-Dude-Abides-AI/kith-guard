@@ -292,7 +292,9 @@ When a response scores at or above the agent's `rewrite_threshold` (Decision 6),
 - **REWRITE** (score ≥ rewrite_threshold, < block_threshold): on timeout, the **original response ships** with `X-KithGuard: rewrite-timeout`. The original was acceptable enough to not block — a failed rewrite is better than no response.
 - **BLOCK_AND_REWRITE** (score ≥ block_threshold): on timeout, the original response MUST NOT ship (it was blocked for a reason). Instead: retry the rewrite once with a fresh 2s budget. If the retry also times out, ship a **generic fallback** ("Let me reconsider and follow up") with `X-KithGuard: block-timeout` and log the full original + context for async review. This preserves the block semantic at the cost of a degraded response.
 
-The same 2s budget applies to the optional re-score call.
+The same 2s budget applies to the optional re-score call. **Re-score timeout behavior:**
+- **REWRITE + re-score timeout**: ship the rewrite with `X-KithGuard: rewrite`. The original was only rewrite-level bad; the rewrite is likely an improvement even without confirmation.
+- **BLOCK_AND_REWRITE + re-score timeout**: ship the **generic fallback** with `X-KithGuard: block-timeout`. Cannot confirm the rewrite cleared the block threshold — same conservative fallback as rewrite timeout on this path.
 
 **How the rewrite works:** The primary model receives a rewrite prompt containing:
 1. The original response (verbatim)
