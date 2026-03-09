@@ -490,6 +490,7 @@ Full gate operation — flagged responses are **rewritten before delivery** per 
 **Ongoing quality assurance:**
 - **Monthly precision audit**: 20 random flagged responses reviewed by 2 reviewers
 - **Hard rollback trigger**: if precision drops below 60% over any rolling 20-sample window, auto-downgrade one phase (`enforcement → advisory`). Follows the same state machine as Phase 2
+- **Watch zone (60–68% precision)**: if a monthly audit measures precision between 60–68% (below the Phase 3 entry CI lower bound of 68% but above the hard rollback floor of 60%), the following response is mandatory: (a) ops alert, (b) next audit accelerated to 2 weeks instead of 1 month with increased sample size (40 instead of 20), (c) rubric review initiated. If 2 consecutive audits remain in the watch zone, auto-downgrade to advisory. **Rationale for the 60% floor:** the hard rollback is deliberately lower than the entry bar to provide hysteresis — a 20-sample window is noisy and a single dip to 65% shouldn't trigger flapping. The watch zone closes the gap by ensuring sustained degradation below entry quality is caught and escalated, not tolerated indefinitely
 
 **Rollback:** Any phase can revert to the previous phase via a single config change (`mode: shadow | advisory | enforcement`). Manual rollback skips the state machine — operator can jump to any phase. Auto-rollback always steps down one phase at a time.
 
