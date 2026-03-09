@@ -394,7 +394,7 @@ Every response passing through Kith Guard carries these headers:
 | Header | Values | Description |
 | --- | --- | --- |
 | `X-KithGuard` | `pass` · `rewrite` · `block` · `timeout` · `unavailable` · `rewrite-failed` · `block-rewrite-failed` · `rewrite-timeout` · `block-timeout` · `bypassed` · `family-violation` | Gate disposition |
-| `X-KithGuard-Score` | `1`–`5` | Judge score (absent on bypass/timeout/unavailable) |
+| `X-KithGuard-Score` | `1`–`5` | Judge score (absent on bypass/timeout/unavailable/family-violation) |
 | `X-KithGuard-Latency` | integer (ms) | Total gate processing time |
 | `X-KithGuard-Rubric` | e.g. `sycophancy-v1.0` | Rubric version used for scoring |
 
