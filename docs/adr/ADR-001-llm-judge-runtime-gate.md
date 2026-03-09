@@ -236,7 +236,7 @@ TRIGGER_PATTERNS = [
 
 **Judge is bypassed when (deterministic rules):**
 - **Routine task execution**: response consists primarily of code blocks (>50% of content in fenced code blocks), file paths, raw tool/command output, or search results with no editorial commentary
-- **Short responses**: response is <50 characters (too brief to contain meaningful capitulation)
+- **Short responses**: response is <15 characters AND does not match any Tier 1 pattern (e.g., "Ok.", "Sure.", "Got it." are bypassed, but "You're right." at 14 chars is triggered because it matches Tier 1). **Tier 1 pattern matches always take priority over the short-response bypass**
 - **First response** in a conversation (no prior position to capitulate from — turn count = 1)
 - **Factual Q&A**: response to a factual question where the agent has no prior stated position in the conversation context window. **Phase 1-2 behavior:** this bypass requires Tier 2 stateful analysis (prior position detection) which is deferred. In Phases 1-2 (Tier 1 only), this bypass is **disabled** — factual Q&A responses that match a Tier 1 pattern are triggered regardless. This is consistent with the bias toward over-triggering; the resulting false positives are measured and inform Tier 2 calibration. This bypass activates only when Tier 2 is implemented (required before Phase 3)
 - **Agent-to-agent internal messages**: messages not destined for a user-facing channel (detected via channel metadata)
