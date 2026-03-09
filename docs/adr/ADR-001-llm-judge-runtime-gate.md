@@ -234,7 +234,9 @@ TRIGGER_PATTERNS = [
 - Response follows a user challenge, question, or disagreement (detected via conversation turn analysis)
 - Response proposes undoing prior work (decision reversal detection)
 
-**Judge is bypassed when (deterministic rules):**
+**Evaluation priority:** When a response satisfies both a trigger condition and a bypass condition, **Tier 1 pattern matches take priority over all bypass rules except agent-to-agent and `enabled: false`**. If a response matches a Tier 1 capitulation pattern, the judge fires regardless of response length, code block ratio, or turn count. The only bypasses that override a Tier 1 match are: (a) agent-to-agent internal messages (never user-facing, no point judging), and (b) explicitly disabled agents. All other bypasses are pre-filters that yield to pattern matches.
+
+**Judge is bypassed when (deterministic rules, subject to priority above):**
 - **Routine task execution**: response consists primarily of code blocks (>50% of content in fenced code blocks), file paths, raw tool/command output, or search results with no editorial commentary
 - **Short responses**: response is <15 characters AND does not match any Tier 1 pattern (e.g., "Ok.", "Sure.", "Got it." are bypassed, but "You're right." at 14 chars is triggered because it matches Tier 1). **Tier 1 pattern matches always take priority over the short-response bypass**
 - **First response** in a conversation (no prior position to capitulate from — turn count = 1)
