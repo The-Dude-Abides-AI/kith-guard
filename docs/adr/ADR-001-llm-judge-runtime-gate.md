@@ -302,7 +302,12 @@ The same 2s budget applies to the optional re-score call.
 
 **When:** Only when score ≥ agent's `rewrite_threshold`. Scores below threshold pass through untouched — no rewrite overhead.
 
-**Retry cap:** Maximum **1 rewrite attempt**. If the rewritten response is re-scored and still scores ≥ the agent's `rewrite_threshold`, it ships anyway with `X-KithGuard: rewrite-failed` metadata. Rationale: an infinite rewrite loop is worse than one sycophantic response. The failure is logged for rubric calibration — persistent rewrite failures indicate the rubric or rewrite template needs tuning, not that the gate should keep retrying.
+**Retry cap:** Maximum **1 rewrite attempt**. Behavior on rewrite-failed depends on the original gate action:
+- **REWRITE + rewrite-failed** (rewrite still scores ≥ `rewrite_threshold` but < `block_threshold`): ship the rewrite with `X-KithGuard: rewrite-failed`. The original was only rewrite-level bad; an imperfect rewrite is acceptable degradation.
+- **BLOCK_AND_REWRITE + rewrite-failed, rewrite scores ≥ `rewrite_threshold` but < `block_threshold`**: ship the rewrite with `X-KithGuard: rewrite-failed`. The rewrite improved enough to drop below the block threshold — acceptable.
+- **BLOCK_AND_REWRITE + rewrite-failed, rewrite still scores ≥ `block_threshold`**: ship the **generic fallback** ("Let me reconsider and follow up") with `X-KithGuard: block-rewrite-failed`. The rewrite didn't clear the block bar, so it must not ship — consistent with the block-timeout behavior in the BLOCK_AND_REWRITE timeout path.
+
+Rationale: an infinite rewrite loop is worse than one sycophantic response, but a blocked response that fails rewrite should never ship in any form that still exceeds the block threshold. The failure is logged for rubric calibration — persistent rewrite failures indicate the rubric or rewrite template needs tuning, not that the gate should keep retrying.
 
 **Cost:** One additional primary model call (~1–2s) on top of the judge call. Total worst-case for a flagged+rewritten+re-scored response: **~6s** (2s judge + 2s rewrite + 2s re-score). See Decision 1 latency budget table. This only applies to the ~5–15% of responses expected to trigger the judge, of which a fraction will exceed the rewrite threshold.
 
@@ -387,7 +392,7 @@ Every response passing through Kith Guard carries these headers:
 
 | Header | Values | Description |
 | --- | --- | --- |
-| `X-KithGuard` | `pass` · `rewrite` · `block` · `timeout` · `unavailable` · `rewrite-failed` · `rewrite-timeout` · `block-timeout` · `bypassed` · `family-violation` | Gate disposition |
+| `X-KithGuard` | `pass` · `rewrite` · `block` · `timeout` · `unavailable` · `rewrite-failed` · `block-rewrite-failed` · `rewrite-timeout` · `block-timeout` · `bypassed` · `family-violation` | Gate disposition |
 | `X-KithGuard-Score` | `1`–`5` | Judge score (absent on bypass/timeout/unavailable) |
 | `X-KithGuard-Latency` | integer (ms) | Total gate processing time |
 | `X-KithGuard-Rubric` | e.g. `sycophancy-v1.0` | Rubric version used for scoring |
