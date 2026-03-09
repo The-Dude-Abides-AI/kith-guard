@@ -311,6 +311,10 @@ The same 2s budget applies to the optional re-score call. **Re-score timeout beh
 
 **When:** Only when score ≥ agent's `rewrite_threshold`. Scores below threshold pass through untouched — no rewrite overhead.
 
+**Success paths:**
+- **REWRITE + rewrite succeeds** (re-score < `rewrite_threshold`): ship the rewrite with `X-KithGuard: rewrite`. The response was improved.
+- **BLOCK_AND_REWRITE + rewrite succeeds** (re-score < `block_threshold`): ship the rewrite with `X-KithGuard: block`. The `block` disposition signals to consumers that the original response was suppressed and this is a replacement.
+
 **Retry cap:** Maximum **1 rewrite attempt**. Behavior on rewrite-failed depends on the original gate action:
 - **REWRITE + rewrite-failed** (rewrite still scores ≥ `rewrite_threshold` but < `block_threshold`): ship the rewrite with `X-KithGuard: rewrite-failed`. The original was only rewrite-level bad; an imperfect rewrite is acceptable degradation.
 - **REWRITE + rewrite-failed, rewrite scores ≥ `block_threshold`**: the rewrite worsened beyond the block bar. Ship the **generic fallback** with `X-KithGuard: block-rewrite-failed`. A rewrite that escalates past the block threshold must not ship — apply the same block-level protection regardless of the original gate action.
