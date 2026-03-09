@@ -146,7 +146,7 @@ MODEL_FAMILIES:
 - At startup, Kith Guard resolves the primary model family and the judge model family from a maintained registry
 - If families match → **hard error**, gate refuses to start, ops alert fires
 - If primary model changes at runtime → family check re-evaluates on next invocation. **On runtime family match:** the current response ships unjudged with `X-KithGuard: family-violation` metadata, the gate disables judging for all subsequent invocations, and an **incident escalation** fires (not just an ops alert). Judging remains disabled until the operator resolves the family conflict and explicitly re-enables the gate. This is stricter than the circuit breaker (Decision 2) because a family violation is a security invariant breach, not an operational hiccup
-- **Escape hatch**: `KITHGUARD_SKIP_FAMILY_CHECK=true` env var for testing only, logged as a security event
+- **Escape hatch**: `KITHGUARD_SKIP_FAMILY_CHECK=true` env var for testing only. **Scope:** bypasses both the startup hard-error check AND runtime re-evaluation family checks while set. Every invocation (not just startup) emits a `severity: security` audit event when the var is active. **Restrictions:** MUST NOT be set in any persistent environment (`.env`, `launchd`, `systemd`, `config.yaml`). Intended for local test runs only where same-family models are used to exercise gate logic. If detected in a persistent config at startup, the gate logs a security escalation and proceeds as if the var were unset
 
 **If someone swaps primary to Mistral**: The gate blocks startup and requires configuring a non-Mistral judge (e.g., swap to a Llama-based or Gemini-based judge model).
 
