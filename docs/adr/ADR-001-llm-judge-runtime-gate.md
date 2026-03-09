@@ -407,8 +407,8 @@ Every response passing through Kith Guard carries these headers:
 | Header | Values | Description |
 | --- | --- | --- |
 | `X-KithGuard` | `pass` · `rewrite` · `block` · `timeout` · `unavailable` · `rewrite-failed` · `block-rewrite-failed` · `rewrite-timeout` · `block-timeout` · `bypassed` · `family-violation` | Gate disposition |
-| `X-KithGuard-Score` | `1`–`5` | **Original** judge score that determined the gate action (absent on bypass/timeout/unavailable/family-violation). Always reflects the pre-rewrite judgment, used for monitoring sycophancy rate and rubric calibration |
-| `X-KithGuard-Rescore` | `1`–`5` | Re-score of the rewritten response (absent when no re-score occurred — bypass, pass, timeout, unavailable, family-violation, rewrite-timeout, block-timeout). Used to track rewrite effectiveness over time |
+| `X-KithGuard-Score` | `1`–`5` | **Original** judge score that determined the gate action (absent on `bypassed`/`timeout`/`unavailable`/`family-violation`). Always reflects the pre-rewrite judgment, used for monitoring sycophancy rate and rubric calibration |
+| `X-KithGuard-Rescore` | `1`–`5` | Re-score of the rewritten response (absent when no re-score occurred — `bypassed`, `pass`, `timeout`, `unavailable`, `family-violation`, `rewrite-timeout`, `block-timeout`, and `rewrite` when caused by re-score timeout). Used to track rewrite effectiveness over time |
 | `X-KithGuard-Latency` | integer (ms) | Total gate processing time |
 | `X-KithGuard-Rubric` | e.g. `sycophancy-v1.0` | Rubric version used for scoring |
 
