@@ -447,23 +447,37 @@ User msg → Primary Model → Response
                        REWRITE      BLOCK_AND_REWRITE
                       (substitute)  (suppress original)
                            │              │
+                  Check rewrite CB:  Check rewrite CB:
+                   CB open →         CB open →
+                   rewrite-cb-open   block-cb-open
+                   (ship original)   (ship fallback)
+                   CB closed ↓       CB closed ↓
+                           │              │
                     Rewrite (Primary)  Rewrite (Primary)
                            │              │
-                    [Optional re-score]  [Optional re-score]
+                    [Re-score]       [Re-score]
                            │              │
-                        Deliver        Deliver rewrite ONLY
-                   (X-KithGuard:    (X-KithGuard: block)
-                    rewrite)        Original never ships
+                    Re-score results: Re-score results:
+                     < rewrite →      < rewrite → block
+                      rewrite        ≥ rewrite, < block →
+                     ≥ rewrite,        rewrite-failed
+                      < block →      ≥ block →
+                      rewrite-failed   block-rewrite-failed
+                     ≥ block →       timeout → block-timeout
+                      block-rewrite-failed
+                     timeout → rewrite
+                      (unconfirmed)
                            │              │
-                    On timeout:     On timeout:
-                    ship original   HOLD — re-check rewrite CB:
+                    On rewrite       On rewrite
+                    timeout:         timeout:
+                    ship original    HOLD — re-check CB:
                     (rewrite-timeout)  CB open → block-cb-open
                                        CB closed → retry once
                                          retry timeout → block-timeout
                                          retry succeeds → re-score:
-                                           < rewrite_threshold → block
+                                           < rewrite → block
                                            ≥ rewrite, < block → rewrite-failed
-                                           ≥ block_threshold → block-rewrite-failed
+                                           ≥ block → block-rewrite-failed
                                            re-score timeout → block-timeout
 ```
 
