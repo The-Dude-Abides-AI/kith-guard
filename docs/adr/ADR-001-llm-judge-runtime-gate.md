@@ -98,7 +98,8 @@ The judge evaluation MUST complete within **2 seconds**. If the timeout is excee
 | Re-score timeout — REWRITE path (enforcement only) | N/A | N/A | ~2s judge + ~2s rewrite + 2s re-score timeout = ~6s, then ships rewrite with `rewrite` (cannot confirm improvement, but original was only rewrite-level bad) |
 | Re-score timeout — BLOCK_AND_REWRITE path (enforcement only) | N/A | N/A | ~2s judge + ~2s rewrite + 2s re-score timeout = ~6s, then ships generic fallback with `block-timeout` (cannot confirm rewrite cleared block threshold) |
 | Rewrite CB open — REWRITE path (enforcement only) | N/A | N/A | ~2s judge + ~0ms (rewrite skipped) = ~2s, ships original with `rewrite-cb-open` |
-| Rewrite CB open — BLOCK_AND_REWRITE path (enforcement only) | N/A | N/A | ~2s judge + ~0ms (rewrite skipped) = ~2s, ships generic fallback with `block-cb-open` |
+| Rewrite CB open — BLOCK_AND_REWRITE path, CB already open (enforcement only) | N/A | N/A | ~2s judge + ~0ms (rewrite skipped) = ~2s, ships generic fallback with `block-cb-open` |
+| Rewrite CB open — BLOCK_AND_REWRITE path, first timeout triggers CB (enforcement only) | N/A | N/A | ~2s judge + 2s rewrite timeout (triggers CB) + ~0ms (retry skipped, CB now open) = ~4s, ships generic fallback with `block-cb-open` |
 
 **Flagged responses in enforcement mode accept up to 6s total latency in the common case.** One documented exception: the BLOCK_AND_REWRITE retry-success path (~8s) occurs when the first rewrite times out, the retry succeeds, and re-scoring runs. This is rare (requires both a transient timeout AND a successful retry) but must be re-scored because the BLOCK path never ships unconfirmed content. All other paths stay within 6s. The previous "sub-3s expectation" applies to the ~85–95% of responses that bypass the judge entirely or pass with score below threshold.
 
@@ -459,7 +460,11 @@ User msg → Primary Model → Response
                     (rewrite-timeout)  CB open → block-cb-open
                                        CB closed → retry once
                                          retry timeout → block-timeout
-                                         retry succeeds → re-score
+                                         retry succeeds → re-score:
+                                           < rewrite_threshold → block
+                                           ≥ rewrite, < block → rewrite-failed
+                                           ≥ block_threshold → block-rewrite-failed
+                                           re-score timeout → block-timeout
 ```
 
 ## Operational Ownership
