@@ -89,7 +89,7 @@ The judge evaluation MUST complete within **2 seconds**. If the timeout is excee
 | --- | --- | --- | --- |
 | Untriggered (bypass) | 0 ms | 0 ms | 0 ms |
 | Triggered, score below rewrite threshold (pass) | ~2s judge | ~2s judge | ~2s judge |
-| Triggered, score ≥ rewrite threshold | ~2s judge (no rewrite) | ~2s judge (flag only) | ~2s judge + ~2s rewrite = ~4s |
+| Triggered, score ≥ rewrite threshold | ~2s judge (no rewrite) | ~2s judge (flag only) | N/A — enforcement always proceeds to re-score; see next row |
 | Rewrite + re-score (enforcement only) | N/A | N/A | ~2s judge + ~2s rewrite + ~2s re-score = ~6s |
 | Rewrite timeout — REWRITE path (enforcement only) | N/A | N/A | ~2s judge + 2s rewrite timeout = ~4s, then ships original with `rewrite-timeout` |
 | Rewrite timeout — BLOCK_AND_REWRITE path (enforcement only) | N/A | N/A | ~2s judge + 2s rewrite timeout + 2s retry timeout = ~6s, then ships generic fallback with `block-timeout` |
