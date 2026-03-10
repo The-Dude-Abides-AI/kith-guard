@@ -92,13 +92,14 @@ The judge evaluation MUST complete within **2 seconds**. If the timeout is excee
 | Triggered, score ≥ rewrite threshold | ~2s judge (no rewrite) | ~2s judge (flag only) | N/A — enforcement always proceeds to re-score; see next row |
 | Rewrite + re-score (enforcement only) | N/A | N/A | ~2s judge + ~2s rewrite + ~2s re-score = ~6s |
 | Rewrite timeout — REWRITE path (enforcement only) | N/A | N/A | ~2s judge + 2s rewrite timeout = ~4s, then ships original with `rewrite-timeout` |
-| Rewrite timeout — BLOCK_AND_REWRITE path (enforcement only) | N/A | N/A | ~2s judge + 2s rewrite timeout + 2s retry timeout = ~6s, then ships generic fallback with `block-timeout` |
+| Rewrite timeout — BLOCK_AND_REWRITE path, retry also times out (enforcement only) | N/A | N/A | ~2s judge + 2s rewrite timeout + 2s retry timeout = ~6s, then ships generic fallback with `block-timeout` |
+| Rewrite timeout — BLOCK_AND_REWRITE path, retry succeeds + re-score (enforcement only) | N/A | N/A | ~2s judge + 2s rewrite timeout + ~2s retry + ~2s re-score = **~8s**, then disposition per re-score result. Documented exception to the 6s ceiling — see note below |
 | Re-score timeout — REWRITE path (enforcement only) | N/A | N/A | ~2s judge + ~2s rewrite + 2s re-score timeout = ~6s, then ships rewrite with `rewrite` (cannot confirm improvement, but original was only rewrite-level bad) |
 | Re-score timeout — BLOCK_AND_REWRITE path (enforcement only) | N/A | N/A | ~2s judge + ~2s rewrite + 2s re-score timeout = ~6s, then ships generic fallback with `block-timeout` (cannot confirm rewrite cleared block threshold) |
 | Rewrite CB open — REWRITE path (enforcement only) | N/A | N/A | ~2s judge + ~0ms (rewrite skipped) = ~2s, ships original with `rewrite-cb-open` |
 | Rewrite CB open — BLOCK_AND_REWRITE path (enforcement only) | N/A | N/A | ~2s judge + ~0ms (rewrite skipped) = ~2s, ships generic fallback with `block-cb-open` |
 
-**Flagged responses in enforcement mode accept up to 6s total latency.** This is a deliberate tradeoff — quality matters more than speed on challenge-response turns, which represent ~5–15% of all responses. The previous "sub-3s expectation" applies to the ~85–95% of responses that bypass the judge entirely or pass with score below threshold. For the small fraction that trigger rewrite + re-score, we accept the latency cost because a sycophantic response causes more harm than a 6-second delay.
+**Flagged responses in enforcement mode accept up to 6s total latency in the common case.** One documented exception: the BLOCK_AND_REWRITE retry-success path (~8s) occurs when the first rewrite times out, the retry succeeds, and re-scoring runs. This is rare (requires both a transient timeout AND a successful retry) but must be re-scored because the BLOCK path never ships unconfirmed content. All other paths stay within 6s. The previous "sub-3s expectation" applies to the ~85–95% of responses that bypass the judge entirely or pass with score below threshold.
 
 Timeout responses are logged for async review; persistent timeouts trigger an ops alert.
 
