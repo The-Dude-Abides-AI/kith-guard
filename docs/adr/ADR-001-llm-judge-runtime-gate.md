@@ -197,7 +197,7 @@ agents:
 
 **Unconfigured agent fallback:** If a new agent is added to the system without a corresponding config entry, the gate applies default thresholds (`rewrite_threshold: 3`, `block_threshold: 4`, `rubric: sycophancy-v1.0`) and emits a startup warning. The operator MUST add an explicit config entry before entering Phase 3 (enforcement). This prevents both silent pass-through and startup crashes when agents are added.
 
-**Startup validation:** The gate MUST validate at startup that `rewrite_threshold < block_threshold` for every enabled agent config. On violation → hard error, gate refuses to start, ops alert fires (same enforcement pattern as the model family check in Decision 4).
+**Startup validation:** The gate MUST validate at startup for every enabled agent config: (a) `rewrite_threshold < block_threshold`, and (b) `config.rubric` references a file that exists in `rubrics/`. On any violation → hard error, gate refuses to start, ops alert fires (same enforcement pattern as the model family check in Decision 4). The rubric check prevents silent misconfiguration where a typo in the rubric reference causes runtime `unavailable` errors indistinguishable from an Ollama outage.
 
 **Canonical gate decision function:**
 
@@ -420,7 +420,7 @@ Every response passing through Kith Guard carries these headers:
 | `X-KithGuard-Rubric` | e.g. `sycophancy-v1.0` | Rubric version used for scoring |
 
 **Consumer guidance:**
-- **Confirmed vs unconfirmed rewrites:** A `rewrite` or `block` disposition without an accompanying `X-KithGuard-Rescore` header indicates a re-score timeout — the rewrite shipped without quality confirmation. Consumers tracking rewrite effectiveness MUST check for the presence of `X-KithGuard-Rescore` to distinguish confirmed improvements (rescore present and below threshold) from unconfirmed rewrites (rescore absent). Counting all `rewrite` dispositions as confirmed improvements will produce inflated effectiveness metrics.
+- **Confirmed vs unconfirmed rewrites:** A `rewrite` disposition without an accompanying `X-KithGuard-Rescore` header indicates a re-score timeout — the rewrite shipped without quality confirmation. Consumers tracking rewrite effectiveness MUST check for the presence of `X-KithGuard-Rescore` to distinguish confirmed improvements (rescore present and below threshold) from unconfirmed rewrites (rescore absent). Counting all `rewrite` dispositions as confirmed improvements will produce inflated effectiveness metrics. Note: `block` dispositions always carry `X-KithGuard-Rescore` — a `block` without rescore indicates a gate implementation error, not a re-score timeout.
 - **Block-level originals in `rewrite-failed`:** If `X-KithGuard` is `rewrite-failed` and `X-KithGuard-Score` ≥ the agent's `block_threshold`, the original response was suppressed (BLOCK_AND_REWRITE path) and the shipped content is a partial-improvement rewrite that cleared the block bar but not the rewrite bar. Consumers tracking block-level outcomes MUST check `X-KithGuard-Score` to distinguish REWRITE-path imperfect substitutions (original was never suppressed) from BLOCK_AND_REWRITE-path partial improvements (original was suppressed).
 
 ### Sequence Diagram
