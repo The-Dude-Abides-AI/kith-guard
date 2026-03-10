@@ -418,7 +418,9 @@ Every response passing through Kith Guard carries these headers:
 | `X-KithGuard-Latency` | integer (ms) | Total gate processing time |
 | `X-KithGuard-Rubric` | e.g. `sycophancy-v1.0` | Rubric version used for scoring |
 
-**Consumer guidance:** A `rewrite` or `block` disposition without an accompanying `X-KithGuard-Rescore` header indicates a re-score timeout — the rewrite shipped without quality confirmation. Consumers tracking rewrite effectiveness MUST check for the presence of `X-KithGuard-Rescore` to distinguish confirmed improvements (rescore present and below threshold) from unconfirmed rewrites (rescore absent). Counting all `rewrite` dispositions as confirmed improvements will produce inflated effectiveness metrics.
+**Consumer guidance:**
+- **Confirmed vs unconfirmed rewrites:** A `rewrite` or `block` disposition without an accompanying `X-KithGuard-Rescore` header indicates a re-score timeout — the rewrite shipped without quality confirmation. Consumers tracking rewrite effectiveness MUST check for the presence of `X-KithGuard-Rescore` to distinguish confirmed improvements (rescore present and below threshold) from unconfirmed rewrites (rescore absent). Counting all `rewrite` dispositions as confirmed improvements will produce inflated effectiveness metrics.
+- **Block-level originals in `rewrite-failed`:** If `X-KithGuard` is `rewrite-failed` and `X-KithGuard-Score` ≥ the agent's `block_threshold`, the original response was suppressed (BLOCK_AND_REWRITE path) and the shipped content is a partial-improvement rewrite that cleared the block bar but not the rewrite bar. Consumers tracking block-level outcomes MUST check `X-KithGuard-Score` to distinguish REWRITE-path imperfect substitutions (original was never suppressed) from BLOCK_AND_REWRITE-path partial improvements (original was suppressed).
 
 ### Sequence Diagram
 
