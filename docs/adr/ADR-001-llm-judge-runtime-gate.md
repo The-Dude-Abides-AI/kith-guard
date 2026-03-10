@@ -493,7 +493,7 @@ The judge flags responses scoring at or above the agent's `rewrite_threshold` bu
 
 **Exit criteria → Phase 3:**
 - Minimum **75 flagged responses** reviewed by **2 independent reviewers**
-- Inter-rater agreement ≥ 75% (Cohen's kappa ≥ 0.5)
+- Inter-rater agreement ≥ 75% **AND** Cohen's kappa ≥ 0.5 (both required; kappa is the binding constraint as it corrects for chance agreement — under high base-rate sycophancy prevalence, raw agreement can exceed 75% while kappa falls below 0.5)
 - Observed precision ≥ 80%, with **lower bound of Wilson 95% CI ≥ 68%** (achievable with n=75 at 80% observed precision; Wilson method chosen for small-sample accuracy over Wald)
 - Rubric updated based on review findings
 - **Tier 2 acceptance criteria met** (per Decision 7): position reversal detected in ≥4/5 historical failure cases, recall ≥80% and precision ≥60% on the anti-bias eval set (≥10 triggered + ≥10 non-triggered turns, 2-reviewer labels). Tier 2 must be running in shadow alongside Tier 1 for ≥1 week before Phase 3 entry. Factual Q&A bypass (disabled in Phases 1-2) activates upon Tier 2 deployment
