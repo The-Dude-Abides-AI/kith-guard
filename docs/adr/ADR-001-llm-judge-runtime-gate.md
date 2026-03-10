@@ -201,6 +201,9 @@ agents:
 
 ```python
 def gate_decision(score: int, agent_config: AgentConfig) -> Action:
+    """Precondition: agent_config.enabled is True and thresholds are set.
+    Only call after confirming the agent is not bypassed (Decision 7)."""
+    assert agent_config.enabled, f"gate_decision called for disabled agent {agent_config.id}"
     if score < agent_config.rewrite_threshold:
         return PASS
     elif score < agent_config.block_threshold:
