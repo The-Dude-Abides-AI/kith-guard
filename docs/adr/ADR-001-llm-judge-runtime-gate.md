@@ -417,6 +417,8 @@ Every response passing through Kith Guard carries these headers:
 | `X-KithGuard-Latency` | integer (ms) | Total gate processing time |
 | `X-KithGuard-Rubric` | e.g. `sycophancy-v1.0` | Rubric version used for scoring |
 
+**Consumer guidance:** A `rewrite` or `block` disposition without an accompanying `X-KithGuard-Rescore` header indicates a re-score timeout — the rewrite shipped without quality confirmation. Consumers tracking rewrite effectiveness MUST check for the presence of `X-KithGuard-Rescore` to distinguish confirmed improvements (rescore present and below threshold) from unconfirmed rewrites (rescore absent). Counting all `rewrite` dispositions as confirmed improvements will produce inflated effectiveness metrics.
+
 ### Sequence Diagram
 
 ```
