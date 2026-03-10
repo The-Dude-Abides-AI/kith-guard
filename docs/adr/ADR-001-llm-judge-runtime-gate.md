@@ -554,7 +554,7 @@ Full gate operation — flagged responses are **rewritten before delivery** per 
 | CC6.1 | Logical Access | Model family separation enforced at startup; bypass requires explicit env var logged as security event; log access restricted to gateway operator with audit trail | Config validation logs, startup checks, access audit log |
 | CC7.2 | System Operations | Circuit breaker prevents cascading failure; all unjudged responses logged for async review; reliability SLOs with auto-downgrade | Circuit breaker state logs, async review queue, SLO metrics |
 | CC7.3 | Change Management | Rubric versioning with semver; golden test set required for changes; rollback via config | Git history, test results, config changelog |
-| CC8.1 | Monitoring | Judge availability alerts (>10 min down); persistent timeout alerts; unjudged response metrics; unjudged rate SLO (20% threshold) | Ops channel alerts, monitoring dashboard |
+| CC8.1 | Monitoring | Judge availability alerts (>10 min down); persistent timeout alerts; unjudged response metrics; unjudged rate SLOs — 20% non-CB threshold (auto-downgrade to shadow + ops alert) and 50% all-causes hard ceiling (auto-downgrade regardless of circuit-breaker state) | Ops channel alerts, monitoring dashboard |
 
 ## Version History
 
