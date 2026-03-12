@@ -124,7 +124,7 @@ When the judge (Prometheus/Ollama) is unavailable:
 | Recovery after Ollama restart | 3 consecutive successful judgments | Auto-restore previous mode (advisory/enforcement) |
 | Rewrite circuit breaker open time | > 30 minutes continuous | Ops alert — sustained rewrite CB produces the most severe degradation (`block-cb-open` generic fallbacks). Incident escalation if > 60 minutes continuous |
 | Rewrite CB recovery | 3 consecutive successful rewrite calls | Auto-restore rewrite capability |
-| Re-score failure rate | > 50% over rolling 1-hour window | Ops alert — catches selective Prometheus degradation under re-score load that interleaving masks from the judge CB consecutive-failure counter |
+| Re-score failure rate | > 50% over rolling 1-hour window | Ops alert + rubric review. If sustained > 2 hours: incident escalation. If sustained > 4 hours: auto-disable re-scoring (rewrites ship unconfirmed with `rewrite`, BLOCK path ships generic fallback with `block-timeout`). Catches selective Prometheus degradation under re-score load that interleaving masks from the judge CB consecutive-failure counter |
 
 This is NOT a pure fail-open. The logging + async review creates a safety net. We accept the risk of a sycophantic response shipping because blocking all responses when a local service hiccups is worse for the system's overall reliability. The Mac mini running Ollama will have memory pressure events, updates, and restarts — we can't let that brick the entire agent system.
 
@@ -431,7 +431,9 @@ Every response passing through Kith Guard carries these headers:
 - **Confirmed vs unconfirmed rewrites:** A `rewrite` disposition without an accompanying `X-KithGuard-Rescore` header indicates a re-score timeout — the rewrite shipped without quality confirmation. Consumers tracking rewrite effectiveness MUST check for the presence of `X-KithGuard-Rescore` to distinguish confirmed improvements (rescore present and below threshold) from unconfirmed rewrites (rescore absent). Counting all `rewrite` dispositions as confirmed improvements will produce inflated effectiveness metrics. Note: `block` dispositions always carry `X-KithGuard-Rescore` — a `block` without rescore indicates a gate implementation error, not a re-score timeout.
 - **Block-level originals in `rewrite-failed`:** If `X-KithGuard` is `rewrite-failed` and `X-KithGuard-Score` ≥ the agent's `block_threshold`, the original response was suppressed (BLOCK_AND_REWRITE path) and the shipped content is a partial-improvement rewrite that cleared the block bar but not the rewrite bar. Consumers tracking block-level outcomes MUST check `X-KithGuard-Score` to distinguish REWRITE-path imperfect substitutions (original was never suppressed) from BLOCK_AND_REWRITE-path partial improvements (original was suppressed).
 
-### Sequence Diagram
+### Sequence Diagram (Enforcement Mode)
+
+> **Note:** This diagram depicts **enforcement mode** behavior (Phase 3). In **shadow mode**, the judge scores but the response always ships unmodified (no rewrite branches execute). In **advisory mode**, the judge scores and flags responses in an ops channel but the response ships unmodified (no rewrite branches execute). The rewrite, re-score, CB check, and BLOCK/REWRITE branching logic shown below only activates in enforcement mode.
 
 ```
 User msg → Primary Model → Response
