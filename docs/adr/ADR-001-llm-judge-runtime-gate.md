@@ -101,7 +101,7 @@ The judge evaluation MUST complete within **2 seconds**. If the timeout is excee
 | Rewrite CB open — BLOCK_AND_REWRITE path, CB already open (enforcement only) | N/A | N/A | ~2s judge + ~0ms (rewrite skipped) = ~2s, ships generic fallback with `block-cb-open` |
 | Rewrite CB open — BLOCK_AND_REWRITE path, first timeout triggers CB (enforcement only) | N/A | N/A | ~2s judge + 2s rewrite timeout (triggers CB) + ~0ms (retry skipped, CB now open) = ~4s, ships generic fallback with `block-cb-open` |
 
-**Flagged responses in enforcement mode accept up to 6s total latency in the common case.** Two documented exceptions reach ~8s: (a) BLOCK_AND_REWRITE retry-success + re-score completes (~8s, disposition per re-score result), and (b) BLOCK_AND_REWRITE retry-success + re-score timeout (~8s, ships `block-timeout`). Both require a transient first-attempt timeout AND a successful retry — rare by definition. This is rare (requires both a transient timeout AND a successful retry) but must be re-scored because the BLOCK path never ships unconfirmed content. All other paths stay within 6s. The previous "sub-3s expectation" applies to the ~85–95% of responses that bypass the judge entirely or pass with score below threshold.
+**Flagged responses in enforcement mode accept up to 6s total latency in the common case.** Two documented exceptions reach ~8s: (a) BLOCK_AND_REWRITE retry-success + re-score completes (~8s, disposition per re-score result), and (b) BLOCK_AND_REWRITE retry-success + re-score timeout (~8s, ships `block-timeout`). Both require a transient first-attempt timeout AND a successful retry — rare by definition, but must be re-scored because the BLOCK path never ships unconfirmed content. All other paths stay within 6s. The previous "sub-3s expectation" applies to the ~85–95% of responses that bypass the judge entirely or pass with score below threshold.
 
 Timeout responses are logged for async review; persistent timeouts trigger an ops alert.
 
@@ -242,8 +242,8 @@ TRIGGER_PATTERNS = [
 
 **Judge fires when:**
 - Response matches any Tier 1 pattern
-- Response follows a user challenge, question, or disagreement (detected via conversation turn analysis)
-- Response proposes undoing prior work (decision reversal detection)
+- Response follows a user challenge, question, or disagreement — **Phases 1-2**: detected via Tier 1 regex on the previous user message (e.g., `r"(no|but|actually|i disagree|that's wrong|why did you|are you sure)"` with `re.IGNORECASE`). **Phase 3+**: full Tier 2 conversation turn analysis for nuanced challenge detection
+- Response proposes undoing prior work (decision reversal detection) — **Phases 1-2**: detected via Tier 1 regex on the response (e.g., `r"let me (undo|reverse|revert|consolidate|simplify)"`). **Phase 3+**: Tier 2 stateful prior-position tracking for implicit reversals (e.g., "I'll go with approach B" after advocating A)
 
 **Evaluation priority:** When a response satisfies both a trigger condition and a bypass condition, **Tier 1 pattern matches take priority over all bypass rules except semantic impossibility bypasses and `enabled: false`**. If a response matches a Tier 1 capitulation pattern, the judge fires regardless of response length, code block ratio, or turn count. The only bypasses that override a Tier 1 match are: (a) agent-to-agent internal messages (never user-facing, no point judging), (b) first response in a conversation (no prior position exists to capitulate from — capitulation is logically impossible, making any Tier 1 match a guaranteed false positive), and (c) explicitly disabled agents. All other bypasses are probabilistic pre-filters that yield to pattern matches.
 
