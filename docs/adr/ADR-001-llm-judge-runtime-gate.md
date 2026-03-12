@@ -122,6 +122,8 @@ When the judge (Prometheus/Ollama) is unavailable:
 | Unjudged rate (all causes including circuit breaker) | > 50% over rolling 1-hour window | Auto-downgrade to shadow mode regardless of cause — if more than half of responses are unjudged for any reason, the gate is not providing value |
 | Circuit breaker open time | > 30 minutes continuous | Incident escalation (not just ops alert) |
 | Recovery after Ollama restart | 3 consecutive successful judgments | Auto-restore previous mode (advisory/enforcement) |
+| Rewrite circuit breaker open time | > 30 minutes continuous | Ops alert — sustained rewrite CB produces the most severe degradation (`block-cb-open` generic fallbacks). Incident escalation if > 60 minutes continuous |
+| Rewrite CB recovery | 3 consecutive successful rewrite calls | Auto-restore rewrite capability |
 
 This is NOT a pure fail-open. The logging + async review creates a safety net. We accept the risk of a sycophantic response shipping because blocking all responses when a local service hiccups is worse for the system's overall reliability. The Mac mini running Ollama will have memory pressure events, updates, and restarts — we can't let that brick the entire agent system.
 
