@@ -338,7 +338,7 @@ The same 2s budget applies to the re-score call (mandatory in enforcement mode).
 
 Rationale: an infinite rewrite loop is worse than one sycophantic response, but a blocked response that fails rewrite should never ship in any form that still exceeds the block threshold. The failure is logged for rubric calibration — persistent rewrite failures indicate the rubric or rewrite template needs tuning, not that the gate should keep retrying.
 
-**Cost:** One additional primary model call (~1–2s) on top of the judge call. Total worst-case for a flagged+rewritten+re-scored response: **~6s** (2s judge + 2s rewrite + 2s re-score). See Decision 1 latency budget table. This only applies to the ~5–15% of responses expected to trigger the judge, of which a fraction will exceed the rewrite threshold.
+**Cost:** One additional primary model call (~1–2s) on top of the judge call. Common worst-case for a flagged+rewritten+re-scored response: **~6s** (2s judge + 2s rewrite + 2s re-score). Two documented exceptions reach **~8s** on the BLOCK_AND_REWRITE path when the first rewrite times out and the retry succeeds (see Decision 1 latency budget table). This only applies to the ~5–15% of responses expected to trigger the judge, of which a fraction will exceed the rewrite threshold.
 
 ### 10. Data Retention: Privacy, Log Lifecycle, and Access Controls
 
